@@ -1,5 +1,5 @@
 import java.util.ArrayList;
-
+import java.util.HashMap;
 /* 		OO PARSER AND BYTE-CODE GENERATOR FOR TINY PL
  
  Grammar for TinyPL (using EBNF notation) is as follows:
@@ -50,6 +50,7 @@ import java.util.ArrayList;
 public class Parser {
 
     public static void main(String[] args) {
+    	Code.initialise();
         System.out.println("Enter program and terminate with 'end'!\n");
         Lexer.lex();
         new Program();
@@ -201,20 +202,22 @@ class Loop { //Expects the pointer to be on 'while' keyword
     Cmpdstmt cmpdstmt;
     
     public Loop() {
+    	int whileLoopStartPtr = Code.codeptr; //shiva
+    	
         Lexer.lex(); //eats up the 'while' keyword
         if(Lexer.nextToken == Token.LEFT_PAREN) { //Not req. assum. its synt. correct
             Lexer.lex(); //eats up '('
             rexpr = new Rexpr(); //Assumes Rexpr doesnt eat up ')'
-            Lexer.lex(); //eats up ')'
-            
+            Lexer.lex(); //eats up ')'            
             if(Lexer.nextToken == Token.LEFT_BRACE){ //TODO: Check with TA if this check can be done here or it is necessary for the Cmpdstmt class to check this?
                 cmpdstmt = new Cmpdstmt();
-            }
-            
+            }            
         }
         
-    }
-
+    Code.gen("goto "+whileLoopStartPtr);
+    Code.gen("");
+    Code.gen("");
+    }      
 }
 
 class Cmpdstmt { //Expects the pointer to be on '{'
@@ -239,8 +242,12 @@ class Rexpr {
         comparison_op = Lexer.nextToken;
         Lexer.lex();
         expr_right = new Expr();
-    }
-
+        
+        // conditional operators take three bytes in total. Thats the reason for two more extra empty bytes generated here
+        Code.gen(Code.opcode(Code.comparisonOperators.get(comparison_op)));         //shiva
+        Code.gen("");         //shiva
+        Code.gen("");        //shiva
+    }   
 }
 
 class Expr {
@@ -296,6 +303,7 @@ class Factor {
             case Token.ID: // id
                 id = Lexer.ident;
                 Lexer.lex();
+                Code.gen("istore_" + Idlist.ids.indexOf(id));//shiva
                 break;    
             case Token.LEFT_PAREN: // '('
                 Lexer.lex();
@@ -312,7 +320,16 @@ class Factor {
 class Code {
 	static String[] code = new String[100];
 	static int codeptr = 0;
-	
+    static HashMap<Integer,Character> comparisonOperators = new HashMap<Integer,Character>();
+    
+    static void initialise()
+    {
+    	comparisonOperators.put(Token.GREATER_OP,'>');
+    	comparisonOperators.put(Token.LESSER_OP,'<');
+    	comparisonOperators.put(Token.NOT_EQ, '!');
+    	comparisonOperators.put(Token.ASSIGN_OP, '=');    	    	
+    }
+    
 	public static void gen(String s) {
 		code[codeptr] = s;
 		codeptr++;
@@ -324,12 +341,19 @@ class Code {
 		case '-':  return "isub";
 		case '*':  return "imul";
 		case '/':  return "idiv";
-		default: return "";
+		case '<':  return "if_icmpge";
+		case '>':  return "if_icmple";
+		case '=':  return "if_icmpne";
+		case '!': return "if_icmpeq";
+		default: return "";		
 		}
 	}
 	
 	public static void output() {
 		for (int i=0; i<codeptr; i++)
+		{
+			if(code[i]=="") continue; // to handle (rExp, loop ,condition) which requires skipping two extra bytes of code
 			System.out.println(i + ": " + code[i]);
+		}
 	}
 }
