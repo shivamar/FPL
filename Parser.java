@@ -68,7 +68,7 @@ class Program {
         //Lexer.lex();
         stmts = new Stmts();
         
-        Code.gen("return"); //shiva // END of program
+        Code.gen("return"); // END of program
         /* TODO: Check with TA which approach is to be used. If this how do we attain recurrsion in Stmts?
          do {
          stmts = new Stmts();
@@ -114,7 +114,7 @@ class Idlist {
 
 }
 
-class Stmt {
+class Stmt { // stmt    ->  assign | cond | loop
     Assign asgn;
     Loop loop;
     Cond cond;
@@ -217,7 +217,7 @@ class Cond {
     }
 }
 
-class Loop { //Expects the pointer to be on 'while' keyword
+class Loop { //Expects the pointer to be on 'while' keyword //loop    ->  while '(' rexp ')' cmpdstmt 
     Rexpr rexpr;
     Cmpdstmt cmpdstmt;
     int whileLoopStartPtr;
@@ -227,7 +227,9 @@ class Loop { //Expects the pointer to be on 'while' keyword
     public Loop() {
     	whileLoopStartPtr = Code.codeptr; 
     	
-        Lexer.lex(); //eats up the 'while' keyword
+
+    	
+    	Lexer.lex(); //eats up the 'while' keyword
         if(Lexer.nextToken == Token.LEFT_PAREN) { //Not req. assum. its synt. correct
             Lexer.lex(); //eats up '('
             rexpr = new Rexpr(); //Assumes Rexpr doesnt eat up ')'
@@ -275,9 +277,9 @@ class Rexpr {
         expr_right = new Expr();
         
         // conditional operators take three bytes in total. Thats the reason for two more extra empty bytes generated here
-        Code.gen(Code.opcode(Code.comparisonOperators.get(comparison_op)));         //shiva
-        Code.gen("");         //shiva
-        Code.gen("");        //shiva
+        Code.gen(Code.opcode(Code.comparisonOperators.get(comparison_op)));        
+        Code.gen("");         
+        Code.gen("");       
     }   
 }
 
