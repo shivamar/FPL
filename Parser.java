@@ -67,6 +67,8 @@ class Program {
         decls = new Decls();
         //Lexer.lex();
         stmts = new Stmts();
+        
+        Code.gen("return"); //shiva // END of program
         /* TODO: Check with TA which approach is to be used. If this how do we attain recurrsion in Stmts?
          do {
          stmts = new Stmts();
@@ -147,9 +149,7 @@ class Stmts {
 //            Lexer.lex();
             stmts = new Stmts();
         }
-
     }
-
 }
 
 class Assign {
@@ -164,7 +164,7 @@ class Assign {
             e = new Expr();
 //            Lexer.lex();
             if(Lexer.nextToken == Token.SEMICOLON){//This if is not even required assuming the program is syntactically correct. 
-            	Code.gen("iload_"+ Idlist.ids.indexOf(id));
+            	Code.gen("istore_"+ Idlist.ids.indexOf(id));
                 Lexer.lex(); //eats up the semicolon.
             }
         }
@@ -176,6 +176,11 @@ class Cond {
     Rexpr rexpr;
     Cmpdstmt cmpdstmt_if;
     Cmpdstmt cmpdstmt_else;
+    int ifCondtnStatementStartPtr;
+    int ifFailsNextInstruction;
+    int elseCondtnStatementStartPtr;
+    int elseConditionStatementEndPtr;
+    
     public Cond() { //Expects the pointer to be on 'if' keyword
                     //On completion it will eat out till the last '}' of if/else based on whichever is present
         Lexer.lex(); //eats up the 'if' keyword
@@ -183,40 +188,65 @@ class Cond {
         Lexer.lex(); //eats up '('
         rexpr = new Rexpr(); //Assumes Rexpr doesnt eat up ')'
         Lexer.lex(); //eats up ')'
-
+        
+        ifCondtnStatementStartPtr = Code.codeptr - 3;// Has to mention the end of if-block machine instruction number         
         //if(Lexer.nextToken == Token.LEFT_BRACE){ //Not req. assum. its synt. correct
-        cmpdstmt_if = new Cmpdstmt();
+        cmpdstmt_if = new Cmpdstmt();                             
         
         //After Cmpdstmt the pointer will be at 'else' (if 'else' is present)
-        if(Lexer.nextToken == Token.KEY_ELSE){ //This if check is essential as 'else' is optional in grammar
+        if(Lexer.nextToken == Token.KEY_ELSE){ //This if check is essential as 'else' is optional in grammar         	                	
+        	elseCondtnStatementStartPtr = Code.codeptr;
+        	Code.gen("goto");
+        	Code.gen("");
+        	Code.gen("");
+        	
+        	ifFailsNextInstruction = Code.codeptr;
+        	
             Lexer.lex(); //eats up the 'else' keyword
             cmpdstmt_else = new Cmpdstmt();
+            
+        	elseConditionStatementEndPtr = Code.codeptr; 
+            Code.setConditionFail(elseCondtnStatementStartPtr, elseConditionStatementEndPtr);
+        }        
+        
+        else {
+        	ifFailsNextInstruction = Code.codeptr;
         }
         
+        Code.setConditionFail(ifCondtnStatementStartPtr, ifFailsNextInstruction);//Handles if control doesnt enter if block.
     }
-
 }
 
 class Loop { //Expects the pointer to be on 'while' keyword
     Rexpr rexpr;
     Cmpdstmt cmpdstmt;
+    int whileLoopStartPtr;
+    int conditionPosition;
+    int whileLoopEndPtr;
     
     public Loop() {
-    	int whileLoopStartPtr = Code.codeptr; //shiva
+    	whileLoopStartPtr = Code.codeptr; 
     	
         Lexer.lex(); //eats up the 'while' keyword
         if(Lexer.nextToken == Token.LEFT_PAREN) { //Not req. assum. its synt. correct
             Lexer.lex(); //eats up '('
             rexpr = new Rexpr(); //Assumes Rexpr doesnt eat up ')'
-            Lexer.lex(); //eats up ')'            
+            Lexer.lex(); //eats up ')' 
+            
+            conditionPosition = Code.codeptr - 3;
+            
             if(Lexer.nextToken == Token.LEFT_BRACE){ //TODO: Check with TA if this check can be done here or it is necessary for the Cmpdstmt class to check this?
                 cmpdstmt = new Cmpdstmt();
             }            
         }
         
+     // conditional operators take three bytes in total. Thats the reason for two more extra empty bytes generated here
     Code.gen("goto "+whileLoopStartPtr);
     Code.gen("");
     Code.gen("");
+    whileLoopEndPtr = Code.codeptr;
+    //function which sets the point where loop started to points to the end of the loop incase of loop condition fails
+    Code.setConditionFail (conditionPosition, whileLoopEndPtr);
     }      
 }
 
@@ -235,7 +265,8 @@ class Cmpdstmt { //Expects the pointer to be on '{'
 class Rexpr {
     Expr expr_left;
     Expr expr_right;
-    int comparison_op; //Its kept as int purposefully, applying this to the toString of Token the symbol can easily be found
+    int comparison_op; //Its kept as int purposefully, applying this to the toString of Token the symbol can easily be found  
+    
     public Rexpr() {////Expects the pointer to be on left Expression
         expr_left = new Expr();
         //Lexer.lex();
@@ -270,7 +301,6 @@ class Expr {
 }
 
 class Term {
-
     Factor f;
     Term t;
     char op;
@@ -288,7 +318,6 @@ class Term {
 }
 
 class Factor {
-
     Expr e;
     int i;
     char id;
@@ -298,12 +327,26 @@ class Factor {
             case Token.INT_LIT: // number
                 i = Lexer.intValue;
                 Lexer.lex(); //TODO: Confirm with TA as this is Prof code but Sankar commented it.
-                Code.gen("iconst_" + i);
+                
+                String intLitRepresentation = (i < 6) ? "iconst_" :  i < 128 ? "bipush " : "sipush "; 
+                Code.gen(intLitRepresentation + i);
+              
+                switch(intLitRepresentation)
+                {
+                case "bipush ":
+                	Code.gen("");
+                	break;
+                case "sipush ":
+                	Code.gen("");
+                	Code.gen("");
+                	break;
+                }
+                                
                 break;
             case Token.ID: // id
                 id = Lexer.ident;
                 Lexer.lex();
-                Code.gen("istore_" + Idlist.ids.indexOf(id));//shiva
+                Code.gen("iload_" + Idlist.ids.indexOf(id));//shiva
                 break;    
             case Token.LEFT_PAREN: // '('
                 Lexer.lex();
@@ -321,6 +364,12 @@ class Code {
 	static String[] code = new String[100];
 	static int codeptr = 0;
     static HashMap<Integer,Character> comparisonOperators = new HashMap<Integer,Character>();
+    
+    static void setConditionFail(int conditionStartPosition, int whileLoopEndPtr)
+    {
+    	code[conditionStartPosition] = code[conditionStartPosition] +" "+ String.valueOf(whileLoopEndPtr);
+    }
+    
     
     static void initialise()
     {
